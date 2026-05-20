@@ -1,0 +1,564 @@
+{
+	"info": {
+		"_postman_id": "eddekhar-wallet-collection",
+		"name": "Eddekhar Wallet API",
+		"description": "Eddekhar Employee Wallet API (v1).\n\n**Setup:**\n1. Import `eddekhar-wallet-local.postman_environment.json`\n2. Set `payroll_webhook_secret` = `PAYROLL_WEBHOOK_SECRET` from `.env`\n3. `php artisan serve` + `php artisan queue:work`\n4. Run **0. Health**, then **1. Create Employee**, **6. Payroll — Salary Run**, **4. Create Withdrawal**\n\nSee README.md for full flow.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://127.0.0.1:8000"
+		},
+		{
+			"key": "payroll_webhook_secret",
+			"value": "your-payroll-secret"
+		},
+		{
+			"key": "employee_id",
+			"value": "1"
+		},
+		{
+			"key": "wallet_id",
+			"value": "1"
+		},
+		{
+			"key": "savings_wallet_id",
+			"value": "2"
+		},
+		{
+			"key": "withdrawal_id",
+			"value": "1"
+		},
+		{
+			"key": "external_id",
+			"value": "emp-001"
+		},
+		{
+			"key": "bank_reference_id",
+			"value": ""
+		}
+	],
+	"item": [
+		{
+			"name": "0. Health",
+			"item": [
+				{
+					"name": "Health Check (GET /up)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": "{{base_url}}/up"
+					}
+				}
+			]
+		},
+		{
+			"name": "1. Employees",
+			"item": [
+				{
+					"name": "List Employees",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/employees?status=active&company_id=1&per_page=15",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "employees"],
+							"query": [
+								{
+									"key": "status",
+									"value": "active",
+									"description": "active | inactive | terminated"
+								},
+								{
+									"key": "company_id",
+									"value": "1"
+								},
+								{
+									"key": "per_page",
+									"value": "15"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Employee (+ Salary Wallet)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const json = pm.response.json();",
+									"    if (json.data) {",
+									"        pm.collectionVariables.set('employee_id', json.data.id);",
+									"        pm.collectionVariables.set('external_id', json.data.external_id);",
+									"        if (json.data.wallets && json.data.wallets.length > 0) {",
+									"            pm.collectionVariables.set('wallet_id', json.data.wallets[0].id);",
+									"        }",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"external_id\": \"emp-001\",\n  \"name\": \"Ahmed Ali\",\n  \"email\": \"ahmed@example.com\",\n  \"company_id\": 1,\n  \"status\": \"active\",\n  \"currency\": \"SAR\"\n}"
+						},
+						"url": "{{base_url}}/api/v1/employees"
+					}
+				},
+				{
+					"name": "Show Employee (with Wallets)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": "{{base_url}}/api/v1/employees/{{employee_id}}"
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Wallets",
+			"item": [
+				{
+					"name": "List Wallets for Employee",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const json = pm.response.json();",
+									"    if (json.data && json.data.length > 0) {",
+									"        json.data.forEach(w => {",
+									"            if (w.type === 'salary') pm.collectionVariables.set('wallet_id', w.id);",
+									"            if (w.type === 'savings') pm.collectionVariables.set('savings_wallet_id', w.id);",
+									"        });",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/employees/{{employee_id}}/wallets?type=salary",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "employees", "{{employee_id}}", "wallets"],
+							"query": [
+								{
+									"key": "type",
+									"value": "salary"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Wallet (e.g. Savings)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const json = pm.response.json();",
+									"    if (json.data && json.data.id) {",
+									"        pm.collectionVariables.set('wallet_id', json.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"savings\",\n  \"currency\": \"SAR\"\n}"
+						},
+						"url": "{{base_url}}/api/v1/employees/{{employee_id}}/wallets"
+					}
+				},
+				{
+					"name": "Show Wallet (Balance)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": "{{base_url}}/api/v1/wallets/{{wallet_id}}"
+					}
+				},
+				{
+					"name": "Transfer (Salary → Savings)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"from_wallet_id\": {{wallet_id}},\n  \"to_wallet_id\": {{savings_wallet_id}},\n  \"amount\": \"1000.0000\",\n  \"reference_id\": \"postman-transfer-001\"\n}"
+						},
+						"url": "{{base_url}}/api/v1/transfers"
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Transactions",
+			"item": [
+				{
+					"name": "List Transactions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/wallets/{{wallet_id}}/transactions?type=credit&date_from=2026-01-01&date_to=2026-12-31&per_page=15",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "wallets", "{{wallet_id}}", "transactions"],
+							"query": [
+								{
+									"key": "type",
+									"value": "credit",
+									"description": "credit | debit | transfer_in | transfer_out | withdrawal_reserved | withdrawal_refund"
+								},
+								{
+									"key": "date_from",
+									"value": "2026-01-01"
+								},
+								{
+									"key": "date_to",
+									"value": "2026-12-31"
+								},
+								{
+									"key": "per_page",
+									"value": "15"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "4. Withdrawals",
+			"item": [
+				{
+					"name": "Create Withdrawal",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const json = pm.response.json();",
+									"    if (json.data) {",
+									"        pm.collectionVariables.set('withdrawal_id', json.data.id);",
+									"        if (json.data.bank_reference_id) {",
+									"            pm.collectionVariables.set('bank_reference_id', json.data.bank_reference_id);",
+									"        }",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"amount\": \"500.0000\"\n}"
+						},
+						"url": "{{base_url}}/api/v1/wallets/{{wallet_id}}/withdrawals"
+					}
+				},
+				{
+					"name": "Show Withdrawal (Poll Status)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": "{{base_url}}/api/v1/withdrawals/{{withdrawal_id}}"
+					}
+				}
+			]
+		},
+		{
+			"name": "5. Webhooks (Direct)",
+			"item": [
+				{
+					"name": "Payroll Webhook (signed)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"const secret = pm.collectionVariables.get('payroll_webhook_secret');",
+									"const timestamp = Math.floor(Date.now() / 1000).toString();",
+									"const body = pm.request.body.raw;",
+									"const signature = CryptoJS.HmacSHA256(timestamp + '.' + body, secret).toString(CryptoJS.enc.Hex);",
+									"pm.request.headers.upsert({ key: 'X-Payroll-Timestamp', value: timestamp });",
+									"pm.request.headers.upsert({ key: 'X-Payroll-Signature', value: signature });"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Idempotency-Key",
+								"value": "{{payroll_webhook_idempotency_key}}",
+								"description": "Optional; leave env empty to skip. Same key = one PayrollRun at HTTP edge."
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"event_type\": \"salary_run.processed\",\n  \"run_id\": \"run-2026-05\",\n  \"period_start\": \"2026-05-01\",\n  \"period_end\": \"2026-05-31\",\n  \"employees\": [\n    {\n      \"employee_id\": \"{{external_id}}\",\n      \"amount\": \"5000.0000\"\n    }\n  ]\n}"
+						},
+						"url": "{{base_url}}/api/v1/webhooks/payroll"
+					}
+				},
+				{
+					"name": "Bank Webhook — Confirmed",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"bank_reference_id\": \"{{bank_reference_id}}\",\n  \"status\": \"confirmed\"\n}"
+						},
+						"url": "{{base_url}}/api/v1/webhooks/bank"
+					}
+				},
+				{
+					"name": "Bank Webhook — Failed (Refund)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"bank_reference_id\": \"{{bank_reference_id}}\",\n  \"status\": \"failed\"\n}"
+						},
+						"url": "{{base_url}}/api/v1/webhooks/bank"
+					}
+				}
+			]
+		},
+		{
+			"name": "6. Stubs (Demo / Testing)",
+			"item": [
+				{
+					"name": "Payroll — Employee Onboarded",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"event_type\": \"employee.onboarded\",\n  \"payload\": {\n    \"employee_id\": \"emp-stub-002\",\n    \"name\": \"Sara Khan\",\n    \"email\": \"sara@example.com\",\n    \"company_id\": 1,\n    \"currency\": \"SAR\"\n  }\n}"
+						},
+						"url": "{{base_url}}/stubs/payroll/trigger"
+					}
+				},
+				{
+					"name": "Payroll — Salary Run Processed",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"event_type\": \"salary_run.processed\",\n  \"payload\": {\n    \"run_id\": \"run-stub-001\",\n    \"period_start\": \"2026-05-01\",\n    \"period_end\": \"2026-05-31\",\n    \"employees\": [\n      {\n        \"employee_id\": \"{{external_id}}\",\n        \"amount\": \"5000.0000\"\n      }\n    ]\n  }\n}"
+						},
+						"url": "{{base_url}}/stubs/payroll/trigger"
+					}
+				},
+				{
+					"name": "Payroll — Status Changed",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"event_type\": \"employee.status_changed\",\n  \"payload\": {\n    \"employee_id\": \"{{external_id}}\",\n    \"status\": \"inactive\"\n  }\n}"
+						},
+						"url": "{{base_url}}/stubs/payroll/trigger"
+					}
+				},
+				{
+					"name": "Bank — Create Payment (manual)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const json = pm.response.json();",
+									"    if (json.bank_reference_id) {",
+									"        pm.collectionVariables.set('bank_reference_id', json.bank_reference_id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"withdrawal_id\": {{withdrawal_id}},\n  \"wallet_id\": {{wallet_id}},\n  \"amount\": \"500.0000\",\n  \"currency\": \"SAR\"\n}"
+						},
+						"url": "{{base_url}}/stubs/bank/payments"
+					}
+				}
+			]
+		}
+	]
+}
