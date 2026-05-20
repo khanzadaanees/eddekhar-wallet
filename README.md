@@ -77,7 +77,7 @@ The service sits between HR/payroll, the bank, and internal readers (dashboards)
 ### 1. Install and configure
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/khanzadaanees/eddekhar-wallet.git
 cd eddekhar-wallet
 
 composer install
